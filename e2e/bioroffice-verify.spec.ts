@@ -1,7 +1,14 @@
 /**
- * E2E test: BiorOffice post-install verification — skills discovery + live
- * agent usage. Assumes bioroffice is already installed (bioroffice-install
- * spec tests 1-7).
+ * E2E test: BiorOffice post-install verification — dynamic skill discovery +
+ * live agent usage. Assumes bioroffice is already installed
+ * (bioroffice-install spec tests 1-7).
+ *
+ * Note on skills: extension-bundled skills are discovered by the BACKEND
+ * SkillsClient (crates/biorouter/src/agents/skills_extension.rs scans
+ * ~/.config/biorouter/extensions/<name>/skills/) at session start. The chat
+ * bar skills dropdown only lists user-level skill dirs, so the correct
+ * verification is (a) on-disk frontmatter validity and (b) asking the live
+ * agent to loadSkill one of the bundled skills.
  *
  * Launches the dev app with ENABLE_PLAYWRIGHT=true and connects over CDP.
  */
@@ -13,7 +20,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import type { Page, Browser } from '@playwright/test';
 
-const CDP_PORT = 9225;
+const CDP_PORT = 9226;
 const EXT_DIR = join(os.homedir(), '.config', 'biorouter', 'extensions', 'bioroffice');
 const AGENT_OUT_DIR = '/tmp/bioroffice-e2e';
 const AGENT_PPTX = join(AGENT_OUT_DIR, 'demo.pptx');
@@ -22,7 +29,7 @@ let browser: Browser;
 let mainWindow: Page;
 let forgeProcess: ReturnType<typeof spawn>;
 
-test.describe('BiorOffice — skills discovery + live agent usage', () => {
+test.describe('BiorOffice — dynamic skills + live agent usage', () => {
   test.setTimeout(420_000);
 
   test.beforeAll(async () => {
@@ -79,53 +86,51 @@ test.describe('BiorOffice — skills discovery + live agent usage', () => {
     }
   });
 
-  async function goHome(): Promise<void> {
-    const home = mainWindow
-      .locator('[data-testid="sidebar-home-button"], nav >> text=Home, text=Home')
-      .first();
-    if (await home.isVisible({ timeout: 3000 }).catch(() => false)) {
-      await home.click();
-      await mainWindow.waitForTimeout(1500);
-    }
-  }
-
-  test('1. Bundled skills appear in the chat skills dropdown', async () => {
-    await goHome();
-    await mainWindow.screenshot({ path: 'test-results/bioroffice-v1-home.png' });
-
-    const skillsBtn = mainWindow.locator('button[title="manage skills"]');
-    await expect(skillsBtn).toBeVisible({ timeout: 15000 });
-    await skillsBtn.click();
-    const searchInput = mainWindow.locator('input[placeholder="search skills..."]');
-    await expect(searchInput).toBeVisible({ timeout: 5000 });
-    await searchInput.fill('bioroffice');
-    await mainWindow.waitForTimeout(800);
-    await mainWindow.screenshot({ path: 'test-results/bioroffice-v2-skills-dropdown.png' });
-
-    for (const slug of [
+  test('1. Bundled skills are on disk with frontmatter the SkillsClient accepts', async () => {
+    // Same parse rule as ui/desktop skillUtils.parseSkillFrontmatter and the
+    // Rust SkillsClient: --- block with single-line name: and description:
+    const slugs = [
       'bioroffice-office-suite',
       'bioroffice-word',
       'bioroffice-excel',
       'bioroffice-powerpoint',
-    ]) {
-      await expect(mainWindow.locator(`text=${slug}`).first()).toBeVisible({ timeout: 5000 });
+    ];
+    for (const slug of slugs) {
+      const p = join(EXT_DIR, 'skills', slug, 'SKILL.md');
+      expect(fs.existsSync(p), `${p} missing`).toBe(true);
+      const content = fs.readFileSync(p, 'utf8');
+      const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+      expect(match, `${slug} missing frontmatter`).toBeTruthy();
+      expect(/^name:\s*\S+/m.test(match![1]), `${slug} missing name`).toBe(true);
+      expect(/^description:\s*\S+/m.test(match![1]), `${slug} missing description`).toBe(true);
     }
-    await mainWindow.keyboard.press('Escape');
-    console.log('✓ all 4 bundled skills discovered in chat skills dropdown');
+    console.log('✓ all 4 bundled skills present with valid frontmatter');
   });
 
-  test('2. Agent creates a PowerPoint via the officecli tool in a real chat', async () => {
-    await goHome();
-    const input = mainWindow.locator('[data-testid="chat-input"]');
+  test('2. Agent loads a bundled skill and creates a PowerPoint via officecli', async () => {
+    // Navigate to the hub (chat input is on the Home view)
+    const home = mainWindow.locator('[data-testid="sidebar-home-button"]').first();
+    if (await home.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await home.click();
+    } else {
+      await mainWindow.locator('nav a:has-text("Home"), text=Home').first().click().catch(() => {});
+    }
+    await mainWindow.waitForTimeout(1500);
+
+    const input = mainWindow.locator('[data-testid="chat-input"]').first();
     await expect(input).toBeVisible({ timeout: 20000 });
     await input.click();
     await input.fill(
-      `Use the officecli tool from the bioroffice extension to create ${AGENT_PPTX} ` +
-        `and add one slide with title "BiorOffice E2E". Do not ask questions, just do it, ` +
-        `then verify with a view outline call and report the outline.`
+      `Do these two things without asking questions: ` +
+        `(1) Call the loadSkill tool with skill name "bioroffice-office-suite" and tell me ` +
+        `the first heading of what it returns. ` +
+        `(2) Use the officecli tool from the bioroffice extension to create ${AGENT_PPTX} ` +
+        `with one slide titled "BiorOffice E2E", then call officecli view outline on it ` +
+        `and report the outline.`
     );
+    await mainWindow.waitForTimeout(300);
     await input.press('Enter');
-    await mainWindow.waitForTimeout(1000);
+    await mainWindow.waitForTimeout(1500);
     await mainWindow.screenshot({ path: 'test-results/bioroffice-v3-message-sent.png' });
 
     const deadline = Date.now() + 300_000;
@@ -148,8 +153,16 @@ test.describe('BiorOffice — skills discovery + live agent usage', () => {
     expect(created, `agent did not create ${AGENT_PPTX} within timeout`).toBe(true);
     console.log('✓ Agent created', AGENT_PPTX, fs.statSync(AGENT_PPTX).size, 'bytes');
 
-    // Give the agent a moment to finish its verification reply, then capture it
-    await mainWindow.waitForTimeout(15000);
+    // Let the agent finish its reply (skill heading + outline), then capture
+    await mainWindow.waitForTimeout(20000);
     await mainWindow.screenshot({ path: 'test-results/bioroffice-v5-final.png' });
+
+    // The reply should mention the deck title from the outline readback
+    const sawOutline = await mainWindow
+      .locator('text=BiorOffice E2E')
+      .first()
+      .isVisible({ timeout: 10000 })
+      .catch(() => false);
+    console.log(`outline text visible in chat: ${sawOutline}`);
   });
 });

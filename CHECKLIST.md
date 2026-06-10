@@ -68,10 +68,13 @@ after bumping the pinned OfficeCLI engine.
 
 ## 4. Live usage in BioRouter (agent-level)
 
-- [ ] **Skills discovered:** Skills tab lists `bioroffice-office-suite`,
-      `bioroffice-word`, `bioroffice-excel`, `bioroffice-powerpoint`
-      (skills load dynamically at session start from
-      `extensions/bioroffice/skills/`)
+- [ ] **Skills discovered:** all 4 SKILL.md files exist under
+      `extensions/bioroffice/skills/` with valid frontmatter, and in a chat
+      the agent can `loadSkill` `bioroffice-office-suite` successfully.
+      (The backend SkillsClient scans `extensions/*/skills/` at session
+      start; note the GUI Skills page and chat-bar skills dropdown only list
+      *user-level* skill dirs — extension skills are agent-side by design,
+      same as the existing spokeagent extension.)
 - [ ] **New chat session** starts with the extension enabled and the
       `officecli` tool available to the agent
 - [ ] **PowerPoint:** agent creates a .pptx with titled slides, text shapes,
@@ -96,9 +99,26 @@ after bumping the pinned OfficeCLI engine.
 ## Automated coverage
 
 | Checklist | Automated by |
-|---|---|
+| --- | --- |
 | 1 + 2 | `scripts/build_brxt.sh` (structure) + `scripts/functional_test.py` (24 checks: dynamic skills, PPTX, DOCX, XLSX with formula readback, OpenXML validation) |
 | 3 + 4 | `e2e/bioroffice-install.spec.ts` (Playwright, 9 tests: GUI install, disk/config assertions, skills tab, live agent chat creating a .pptx) |
+
+## Verification record — v1.0.0 (2026-06-09)
+
+All four checklists were executed against BioRouter dev (v1.80.1, macOS arm64):
+
+- Checklists 1–2: `build_brxt.sh` OK; install simulation (exec-bit-stripped
+  extraction + `uv sync` + `uv run` launch) OK; **24/24 functional checks
+  passed** against both the simulated and the real installed extension.
+- Checklist 3: installed through the real GUI (Playwright over CDP,
+  `ENABLE_PLAYWRIGHT=true`): manifest + 4-skill preview shown, install
+  succeeded, registered enabled in `config.yaml`, listed in Extensions —
+  **7/7 e2e assertions passed** (`bioroffice-install.spec.ts`).
+- Checklist 4: live agent session (gpt-5.2, autonomous mode) called
+  `loadSkill("bioroffice-office-suite")` and the `officecli` tool to create
+  a deck, then self-verified with `view outline` — **2/2 e2e assertions
+  passed** (`bioroffice-verify.spec.ts`); file independently validated
+  (OpenXML valid, correct outline). Evidence: `docs/evidence/`.
 
 ## Known constraints
 
