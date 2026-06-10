@@ -1,0 +1,45 @@
+{
+  "name": "bioroffice",
+  "display_name": "BiorOffice",
+  "description": "Microsoft Office automation for BioRouter — create, read, and edit Word (.docx), Excel (.xlsx), and PowerPoint (.pptx) documents through the bundled OfficeCLI engine. Self-contained: no Microsoft Office installation required.",
+  "version": "1.0.0",
+  "entry_point": "bioroffice",
+  "repository": "https://github.com/Broccolito/BiorOffice",
+  "tools_count": 1,
+  "env_vars": [
+    {
+      "key": "BIOROFFICE_OFFICECLI_PATH",
+      "required": false,
+      "auto_propagate": true,
+      "default": "",
+      "description": "Optional absolute path to an officecli binary. Leave empty to use the binary bundled with the extension (auto-downloaded if missing for your platform).",
+      "secret": false
+    },
+    {
+      "key": "OFFICECLI_SKIP_UPDATE",
+      "required": false,
+      "auto_propagate": true,
+      "default": "1",
+      "description": "Set to 1 (default) to disable OfficeCLI's background self-update so the engine version stays pinned and deterministic.",
+      "secret": false
+    }
+  ],
+  "skills": [
+    {
+      "name": "bioroffice-office-suite",
+      "description": "Core guide for the BiorOffice officecli tool: command grammar, DOM paths, help system, and dynamic specialized-skill loading for Word, Excel, and PowerPoint"
+    },
+    {
+      "name": "bioroffice-word",
+      "description": "Create and edit rich-formatted Word documents: headings, styles, tables, images, headers/footers, TOC, footnotes, tracked changes"
+    },
+    {
+      "name": "bioroffice-excel",
+      "description": "Create and edit Excel workbooks: cells, complex formulas, charts, pivot tables, conditional formatting, named ranges, data validation"
+    },
+    {
+      "name": "bioroffice-powerpoint",
+      "description": "Create and edit PowerPoint presentations: slides, shapes, text styling, images, tables, charts, transitions, speaker notes"
+    }
+  ]
+}

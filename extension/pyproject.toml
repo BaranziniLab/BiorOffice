@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "bioroffice"
+version = "1.0.0"
+description = "BiorOffice — Microsoft Office automation MCP server for BioRouter, powered by the bundled OfficeCLI engine (Word, Excel, PowerPoint; no Office installation required)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+authors = [
+    { name = "Wanjun Gu", email = "wanjun.gu@ucsf.edu" }
+]
+keywords = [
+    "mcp",
+    "office",
+    "word",
+    "excel",
+    "powerpoint",
+    "docx",
+    "xlsx",
+    "pptx",
+    "biorouter",
+    "officecli"
+]
+dependencies = []
+requires-python = ">=3.10"
+
+[project.scripts]
+bioroffice = "bioroffice.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/bioroffice"]
